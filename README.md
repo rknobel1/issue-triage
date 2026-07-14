@@ -1,4 +1,4 @@
-# Issue Triage AI
+# Issue Triage
 
 An open-source semantic search service that finds likely duplicate GitHub issues.
 It downloads issues from a public repository, creates embeddings locally, and ranks
