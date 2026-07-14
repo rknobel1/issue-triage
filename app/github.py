@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-from app.schemas import Issue
+from app.schemas import Issue, IssueComment
 
 
 class GitHubClient:
@@ -46,6 +46,36 @@ class GitHubClient:
                 yielded += 1
                 if yielded >= limit:
                     break
+            page += 1
+
+    async def iter_issue_comments(
+        self,
+        repository: str,
+        issue_number: int,
+    ) -> AsyncIterator[IssueComment]:
+        page = 1
+
+        while True:
+            response = await self.client.get(
+                f"/repos/{repository}/issues/{issue_number}/comments",
+                params={"per_page": 100, "page": page},
+            )
+            response.raise_for_status()
+            records = response.json()
+
+            if not records:
+                break
+
+            for record in records:
+                user = record.get("user") or {}
+
+                yield IssueComment(
+                    body=record.get("body") or "",
+                    author=user.get("login"),
+                    created_at=record["created_at"],
+                    html_url=record["html_url"],
+                )
+
             page += 1
 
     async def close(self) -> None:

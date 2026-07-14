@@ -22,14 +22,25 @@ class TriageService:
         return len(issues)
 
     def search(
-        self, repository: str, title: str, body: str = "", top_k: int = 5
+        self,
+        repository: str,
+        title: str,
+        body: str = "",
+        top_k: int = 5,
+        exclude_issue_number: int | None = None,
+        created_before: str | None = None,
     ) -> list[SearchResult]:
         issues, embeddings = self.store.load(repository)
         query = self.embedder.encode([f"{title}\n\n{body}".strip()])[0]
         scores = embeddings @ query
-        best = np.argsort(scores)[::-1][: min(top_k, len(issues))]
+        candidates = [
+            index
+            for index in np.argsort(scores)[::-1]
+            if issues[index].number != exclude_issue_number
+            and (created_before is None or issues[index].created_at < created_before)
+        ]
+        best = candidates[: min(top_k, len(candidates))]
         return [
             SearchResult(issue=issues[index], similarity=round(float(scores[index]), 4))
             for index in best
         ]
-

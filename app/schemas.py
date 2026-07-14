@@ -36,3 +36,9 @@ class RepositorySummary(BaseModel):
     repository: str
     issue_count: int
 
+
+class IssueComment(BaseModel):
+    body: str
+    author: str | None = None
+    created_at: str
+    html_url: str
