@@ -7,7 +7,7 @@ from app.schemas import ImportRequest, RepositorySummary, SearchRequest, SearchR
 from app.service import TriageService
 from app.store import RepositoryStore
 
-app = FastAPI(title="Issue Triage AI", version="0.1.0")
+app = FastAPI(title="Issue Triage", version="0.1.0")
 
 
 def get_service() -> TriageService:
