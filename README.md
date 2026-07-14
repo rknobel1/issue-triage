@@ -22,7 +22,7 @@ existing issues by cosine similarity.
 ## Setup
 
 ```bash
-git clone YOUR_REPOSITORY_URL
+git clone https://github.com/rknobel1/issue-triage.git
 cd issue-triage-ai
 python -m venv .venv
 ```
