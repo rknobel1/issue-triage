@@ -1,6 +1,5 @@
 """Evaluate embedding retrieval with manually approved duplicate pairs."""
 
-import json
 import time
 from pathlib import Path
 
