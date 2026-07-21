@@ -14,4 +14,5 @@ class DuplicateCandidate(BaseModel):
     evidence_url: str | None = None
     discovered_at: str
     review_status: Literal["pending", "approved", "rejected"] = "pending"
-
+    query_available: bool | None = None
+    target_available: bool | None = None

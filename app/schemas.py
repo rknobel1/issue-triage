@@ -15,6 +15,14 @@ class Issue(BaseModel):
         return f"{self.title}\n\n{self.body}".strip()
 
 
+class IssueComment(BaseModel):
+    body: str
+    author: str | None = None
+    created_at: str
+    html_url: str
+    issue_number: int | None = None
+
+
 class ImportRequest(BaseModel):
     repository: str = Field(pattern=r"^[^/\s]+/[^/\s]+$")
     limit: int = Field(default=500, ge=1, le=2000)
@@ -35,10 +43,3 @@ class SearchResult(BaseModel):
 class RepositorySummary(BaseModel):
     repository: str
     issue_count: int
-
-
-class IssueComment(BaseModel):
-    body: str
-    author: str | None = None
-    created_at: str
-    html_url: str
