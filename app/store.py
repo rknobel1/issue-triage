@@ -39,3 +39,34 @@ class RepositoryStore:
         embeddings = np.load(embeddings_path, allow_pickle=False)
         return issues, embeddings
 
+    def upsert(
+        self,
+        repository: str,
+        issues: list[Issue],
+        embeddings: NDArray[np.float32],
+    ) -> int:
+        """Append new issues and replace existing issue metadata and vectors."""
+        if len(issues) != len(embeddings):
+            raise ValueError("Issue and embedding counts must match")
+        try:
+            current_issues, current_embeddings = self.load(repository)
+        except FileNotFoundError:
+            self.save(repository, issues, embeddings)
+            return len(issues)
+
+        if len(current_embeddings) and len(embeddings):
+            if current_embeddings.shape[1] != embeddings.shape[1]:
+                raise ValueError("New embeddings use a different vector dimension")
+
+        combined = {
+            issue.number: (issue, current_embeddings[index])
+            for index, issue in enumerate(current_issues)
+        }
+        for index, issue in enumerate(issues):
+            combined[issue.number] = (issue, embeddings[index])
+
+        ordered = sorted(combined.values(), key=lambda item: item[0].number)
+        merged_issues = [item[0] for item in ordered]
+        merged_embeddings = np.asarray([item[1] for item in ordered], dtype=np.float32)
+        self.save(repository, merged_issues, merged_embeddings)
+        return len(issues)

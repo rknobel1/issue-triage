@@ -31,3 +31,36 @@ def test_missing_repository(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         RepositoryStore(tmp_path).load("missing/repo")
 
+
+def test_upsert_adds_and_replaces_issues(tmp_path: Path):
+    store = RepositoryStore(tmp_path)
+    first = Issue(
+        number=1,
+        title="Original",
+        state="open",
+        html_url="https://github.com/acme/demo/issues/1",
+        created_at="2026-01-01T00:00:00Z",
+    )
+    store.save("acme/demo", [first], np.asarray([[1.0, 0.0]], dtype=np.float32))
+    replacement = first.model_copy(update={"title": "Updated"})
+    second = first.model_copy(
+        update={
+            "number": 2,
+            "title": "Second",
+            "html_url": "https://github.com/acme/demo/issues/2",
+        }
+    )
+
+    count = store.upsert(
+        "acme/demo",
+        [replacement, second],
+        np.asarray([[0.5, 0.5], [0.0, 1.0]], dtype=np.float32),
+    )
+    issues, embeddings = store.load("acme/demo")
+
+    assert count == 2
+    assert [issue.number for issue in issues] == [1, 2]
+    assert issues[0].title == "Updated"
+    np.testing.assert_array_equal(
+        embeddings, np.asarray([[0.5, 0.5], [0.0, 1.0]], dtype=np.float32)
+    )
