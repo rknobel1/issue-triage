@@ -44,3 +44,23 @@ def test_search_ranks_most_similar_issue_first(tmp_path: Path):
     assert results[0].issue.number == 1
     assert results[0].similarity > results[1].similarity
 
+
+def test_search_can_exclude_query_issue(tmp_path: Path):
+    store = RepositoryStore(tmp_path)
+    issues = [
+        issue(1, "Login fails", "Cannot sign in"),
+        issue(2, "Dark mode", "Please add a dark theme"),
+    ]
+    store.save("acme/demo", issues, FakeEmbedder().encode([item.text for item in issues]))
+    service = TriageService(store, FakeEmbedder())
+
+    results = service.search(
+        "acme/demo",
+        "Login fails",
+        "Cannot sign in",
+        top_k=2,
+        exclude_issue_number=1,
+    )
+
+    assert [result.issue.number for result in results] == [2]
+

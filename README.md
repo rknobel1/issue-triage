@@ -1,4 +1,4 @@
-# Issue Triage
+# Issue Triage AI
 
 An open-source semantic search service that finds likely duplicate GitHub issues.
 It downloads issues from a public repository, creates embeddings locally, and ranks
@@ -22,8 +22,8 @@ existing issues by cosine similarity.
 ## Setup
 
 ```bash
-git clone https://github.com/rknobel1/issue-triage.git
-cd issue-triage
+git clone YOUR_REPOSITORY_URL
+cd issue-triage-ai
 python -m venv .venv
 ```
 
@@ -96,6 +96,20 @@ pytest
 ruff check .
 ruff format --check .
 ```
+
+## Build an evaluation dataset
+
+After importing a larger issue history, mine duplicate-labeled issues for explicit
+references, review the candidates, and calculate retrieval metrics:
+
+```bash
+issue-triage import-repo fastapi/fastapi --limit 1000
+python -m evaluation.collect_duplicates fastapi/fastapi
+python -m evaluation.hydrate_candidates fastapi/fastapi
+python -m evaluation.evaluate fastapi/fastapi
+```
+
+See `evaluation/README.md` for the review workflow and dataset limitations.
 
 ## API endpoints
 
