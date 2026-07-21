@@ -18,6 +18,7 @@ class Issue(BaseModel):
 class IssueComment(BaseModel):
     body: str
     author: str | None = None
+    author_association: str | None = None
     created_at: str
     html_url: str
     issue_number: int | None = None

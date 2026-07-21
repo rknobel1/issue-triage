@@ -109,6 +109,14 @@ python -m evaluation.hydrate_candidates flutter/flutter
 python -m evaluation.evaluate flutter/flutter
 ```
 
+For repositories with a reliable duplicate label, candidates can instead be sampled
+directly from all matching closed issues and their comment histories:
+
+```bash
+python -m evaluation.collect_duplicates flutter/flutter \
+  --label "r: duplicate" --target-pairs 300 --sample-seed 42
+```
+
 See `evaluation/README.md` for the review workflow and dataset limitations.
 
 ## API endpoints

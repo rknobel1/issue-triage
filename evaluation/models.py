@@ -11,6 +11,7 @@ class DuplicateCandidate(BaseModel):
     evidence: str
     confidence: float = Field(ge=0, le=1)
     actor: str | None = None
+    actor_association: str | None = None
     evidence_url: str | None = None
     discovered_at: str
     review_status: Literal["pending", "approved", "rejected"] = "pending"
