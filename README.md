@@ -103,10 +103,18 @@ After importing a larger issue history, mine duplicate-labeled issues for explic
 references, review the candidates, and calculate retrieval metrics:
 
 ```bash
-issue-triage import-repo fastapi/fastapi --limit 1000
-python -m evaluation.collect_duplicates fastapi/fastapi
-python -m evaluation.hydrate_candidates fastapi/fastapi
-python -m evaluation.evaluate fastapi/fastapi
+issue-triage import-repo flutter/flutter --limit 1000
+python -m evaluation.collect_duplicates flutter/flutter
+python -m evaluation.hydrate_candidates flutter/flutter
+python -m evaluation.evaluate flutter/flutter
+```
+
+For repositories with a reliable duplicate label, candidates can instead be sampled
+directly from all matching closed issues and their comment histories:
+
+```bash
+python -m evaluation.collect_duplicates flutter/flutter \
+  --label "r: duplicate" --target-pairs 300 --sample-seed 42
 ```
 
 See `evaluation/README.md` for the review workflow and dataset limitations.

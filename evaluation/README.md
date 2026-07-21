@@ -26,6 +26,25 @@ Duplicate labels increase candidate confidence but are not required. `--max-comm
 limits API work; comments are processed newest-first. A GitHub token is strongly
 recommended.
 
+For repositories with a reliable duplicate label, use label-driven collection. This
+does not require a repository import first and avoids missing old closing comments:
+
+```bash
+python -m evaluation.collect_duplicates flutter/flutter \
+  --label "r: duplicate" \
+  --target-pairs 300 \
+  --sample-seed 42
+```
+
+Label mode paginates up to `--max-labeled-issues` matching closed issues, takes a
+reproducible random sample across their history, and scans each selected issue's body
+and complete comment history. It records the comment author's repository association
+so evidence from owners, members, and collaborators can be reviewed first. Confidence
+is a review priority only; candidates are never approved automatically.
+
+Re-run with a different seed to expand the candidate set. Existing review decisions
+are preserved when the same pair is rediscovered.
+
 ## 3. Review the candidates
 
 Open `evaluation/datasets/candidates.json`, follow each evidence URL, and change:
@@ -78,6 +97,7 @@ reports Recall@1, Recall@5, mean reciprocal rank, and mean query latency.
 | `source` | Whether evidence came from the body or a comment |
 | `evidence` | Short text that produced the candidate |
 | `confidence` | Collection heuristic, not model confidence |
+| `actor_association` | GitHub relationship such as `MEMBER` or `COLLABORATOR` |
 | `review_status` | Manual ground-truth decision |
 | `query_available` | Whether the query was stored when collected |
 | `target_available` | Whether the canonical issue was stored when collected |
@@ -90,3 +110,7 @@ reports Recall@1, Recall@5, mean reciprocal rank, and mean query latency.
 - The regex intentionally ignores vague phrases such as `related to #123`.
 - Re-running collection refreshes the evidence while preserving existing review
   decisions for pairs that are rediscovered.
+- A duplicate label identifies the duplicate query, not necessarily its canonical
+  target. Every extracted pair still requires review.
+- Hydrating approved pairs only adds the query and target. For credible retrieval
+  metrics, build a fixed candidate corpus containing realistic historical negatives.

@@ -34,19 +34,45 @@ class GitHubClient:
         )
 
     async def iter_issues(self, repository: str, limit: int) -> AsyncIterator[Issue]:
+        async for issue in self._iter_issues(repository, limit, state="all"):
+            yield issue
+
+    async def iter_labeled_issues(
+        self,
+        repository: str,
+        label: str,
+        limit: int,
+        state: str = "closed",
+    ) -> AsyncIterator[Issue]:
+        """Yield issues carrying an exact label, oldest first for temporal diversity."""
+        async for issue in self._iter_issues(
+            repository,
+            limit,
+            state=state,
+            labels=label,
+            sort="created",
+            direction="asc",
+        ):
+            yield issue
+
+    async def _iter_issues(
+        self,
+        repository: str,
+        limit: int,
+        **filters: str,
+    ) -> AsyncIterator[Issue]:
         page = 1
         yielded = 0
         while yielded < limit:
             response = await self.client.get(
                 f"/repos/{repository}/issues",
-                params={"state": "all", "per_page": 100, "page": page},
+                params={**filters, "per_page": 100, "page": page},
             )
             response.raise_for_status()
             records = response.json()
             if not records:
                 break
             for record in records:
-                # GitHub's issues endpoint also returns pull requests.
                 if "pull_request" in record:
                     continue
                 yield self._parse_issue(record)
@@ -73,6 +99,7 @@ class GitHubClient:
                 yield IssueComment(
                     body=record.get("body") or "",
                     author=user.get("login"),
+                    author_association=record.get("author_association"),
                     created_at=record["created_at"],
                     html_url=record["html_url"],
                     issue_number=issue_number,
@@ -107,6 +134,7 @@ class GitHubClient:
                 yield IssueComment(
                     body=record.get("body") or "",
                     author=user.get("login"),
+                    author_association=record.get("author_association"),
                     created_at=record["created_at"],
                     html_url=record["html_url"],
                     issue_number=int(match.group("number")),
@@ -117,10 +145,7 @@ class GitHubClient:
             page += 1
 
     async def get_issue(self, repository: str, issue_number: int) -> Issue:
-        """Download one issue by number."""
-        response = await self.client.get(
-            f"/repos/{repository}/issues/{issue_number}"
-        )
+        response = await self.client.get(f"/repos/{repository}/issues/{issue_number}")
         response.raise_for_status()
         return self._parse_issue(response.json())
 
