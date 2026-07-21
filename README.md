@@ -1,4 +1,4 @@
-# Issue Triage AI
+# Issue Triage
 
 An open-source semantic search service that finds likely duplicate GitHub issues.
 It downloads issues from a public repository, creates embeddings locally, and ranks
@@ -22,8 +22,8 @@ existing issues by cosine similarity.
 ## Setup
 
 ```bash
-git clone YOUR_REPOSITORY_URL
-cd issue-triage-ai
+git clone https://github.com/rknobel1/issue-triage.git
+cd issue-triage
 python -m venv .venv
 ```
 
@@ -124,11 +124,10 @@ job is an intentional later milestone.
 
 ## Next milestones
 
-1. Create an evaluation dataset of confirmed duplicate pairs.
-2. Add TF-IDF as a baseline and report Recall@1, Recall@5, and MRR.
-3. Add PostgreSQL and pgvector after the local pipeline is evaluated.
-4. Build a small Next.js interface.
-5. Add label prediction and human feedback collection.
+1. Add TF-IDF as a baseline and report Recall@1, Recall@5, and MRR.
+2. Add PostgreSQL and pgvector after the local pipeline is evaluated.
+3. Build a small Next.js interface.
+4. Add label prediction and human feedback collection.
 
 ## License
 
