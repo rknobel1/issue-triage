@@ -86,7 +86,30 @@ python -m evaluation.evaluate flutter/flutter
 ```
 
 The evaluator excludes the query issue itself and issues created after the query. It
-reports Recall@1, Recall@5, mean reciprocal rank, and mean query latency.
+reports Recall@1, Recall@5, Recall@10, mean reciprocal rank, and mean, median, and
+p95 query latency.
+
+Compare dense retrieval with reciprocal rank fusion (RRF), which combines dense and
+TF-IDF rank positions without assuming their raw scores are calibrated:
+
+```bash
+python -m evaluation.evaluate flutter/flutter \
+  --method dense --method rrf --rrf-k 60 \
+  --experiment-name dense-vs-rrf
+```
+
+Evaluate a two-stage pipeline that retrieves dense candidates and reranks them with
+the local `cross-encoder/ms-marco-MiniLM-L6-v2` model:
+
+```bash
+python -m evaluation.evaluate flutter/flutter \
+  --method dense --method rerank --rerank-top-n 50 \
+  --experiment-name dense-vs-rerank
+```
+
+The first reranker run downloads its model. Set `RERANKER_MODEL` in `.env` to test a
+different sentence-transformers cross-encoder. A target outside the dense top-N is
+correctly counted as not retrieved by the reranking pipeline.
 
 ## Dataset fields
 

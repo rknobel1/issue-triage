@@ -1,6 +1,6 @@
 from app.schemas import Issue
 from evaluation.collect_duplicates import extract_references, has_duplicate_label
-from evaluation.evaluate import calculate_metrics
+from evaluation.evaluate import calculate_latency_stats, calculate_metrics
 
 
 def test_extracts_explicit_duplicate_references():
@@ -9,10 +9,7 @@ def test_extracts_explicit_duplicate_references():
 
 
 def test_extracts_closing_as_duplicate_and_full_urls():
-    text = (
-        "Closing as Duplicate of #123; duplicate of "
-        "https://github.com/acme/demo/issues/456"
-    )
+    text = "Closing as Duplicate of #123; duplicate of https://github.com/acme/demo/issues/456"
     assert extract_references(text) == [123, 456]
 
 
@@ -37,3 +34,10 @@ def test_calculates_retrieval_metrics():
     assert metrics["recall_at_1"] == 0.25
     assert metrics["recall_at_5"] == 0.75
     assert metrics["mrr"] == (1 + 0.5 + 0 + 0.2) / 4
+
+
+def test_calculates_latency_statistics():
+    stats = calculate_latency_stats([10.0, 20.0, 30.0, 40.0])
+    assert stats["mean_latency_ms"] == 25.0
+    assert stats["median_latency_ms"] == 25.0
+    assert stats["p95_latency_ms"] == 38.5

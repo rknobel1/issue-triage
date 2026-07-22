@@ -9,13 +9,14 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+import numpy as np
 from pydantic import TypeAdapter
 
 from app.config import settings
 from app.embeddings import get_embedder
 from app.store import RepositoryStore
 from evaluation.models import DuplicateCandidate
-from evaluation.retrievers import rank_issues
+from evaluation.retrievers import get_reranker, rank_issues
 
 app = typer.Typer(help="Evaluate duplicate retrieval against an approved dataset.")
 
@@ -29,6 +30,17 @@ def calculate_metrics(ranks: list[int | None]) -> dict[str, float]:
         "recall_at_5": sum(rank is not None and rank <= 5 for rank in ranks) / total,
         "recall_at_10": sum(rank is not None and rank <= 10 for rank in ranks) / total,
         "mrr": sum(0.0 if rank is None else 1.0 / rank for rank in ranks) / total,
+    }
+
+
+def calculate_latency_stats(latencies_ms: list[float]) -> dict[str, float]:
+    if not latencies_ms:
+        raise ValueError("At least one latency is required")
+    values = np.asarray(latencies_ms, dtype=np.float64)
+    return {
+        "mean_latency_ms": float(np.mean(values)),
+        "median_latency_ms": float(np.median(values)),
+        "p95_latency_ms": float(np.percentile(values, 95)),
     }
 
 
@@ -70,12 +82,18 @@ def run(
     repository: str,
     dataset: Path = Path("evaluation/datasets/candidates.json"),
     methods: Annotated[
-    list[str],
-    typer.Option("--method", help="Repeat to compare multiple retrievers."),
+        list[str],
+        typer.Option("--method", help="Repeat to compare multiple retrievers."),
     ] = [],
     hybrid_weight: Annotated[
         float, typer.Option(help="Dense contribution to the hybrid score (0..1).")
     ] = 0.5,
+    rrf_k: Annotated[
+        int, typer.Option(min=1, help="RRF rank constant; larger values flatten ranks.")
+    ] = 60,
+    rerank_top_n: Annotated[
+        int, typer.Option(min=1, help="Dense candidates passed to the cross-encoder.")
+    ] = 50,
     top_k_details: Annotated[
         int, typer.Option(min=1, help="Number of ranked candidates saved per query.")
     ] = 10,
@@ -83,7 +101,7 @@ def run(
     experiment_name: str | None = None,
 ) -> None:
     """Evaluate retrievers and save detailed JSON and CSV results."""
-    valid_methods = {"dense", "tfidf", "hybrid"}
+    valid_methods = {"dense", "tfidf", "hybrid", "rrf", "rerank"}
     selected_methods = methods or ["dense", "tfidf", "hybrid"]
 
     invalid_methods = set(selected_methods) - valid_methods
@@ -96,9 +114,7 @@ def run(
     if not 0.0 <= hybrid_weight <= 1.0:
         raise typer.BadParameter("--hybrid-weight must be between 0 and 1")
 
-    approved = [
-        item for item in load_approved(dataset) if item.repository == repository
-    ]
+    approved = [item for item in load_approved(dataset) if item.repository == repository]
     if not approved:
         raise typer.BadParameter(
             "No approved pairs found. Set review_status to 'approved' after review."
@@ -108,6 +124,7 @@ def run(
     issues, embeddings = store.load(repository)
     issues_by_number = {issue.number: issue for issue in issues}
     embedder = get_embedder()
+    reranker = get_reranker() if "rerank" in selected_methods else None
     started_at = datetime.now(UTC)
     safe_repository = repository.replace("/", "-")
     suffix = f"-{experiment_name}" if experiment_name else ""
@@ -115,12 +132,8 @@ def run(
 
     details: list[dict] = []
     csv_rows: list[dict] = []
-    ranks_by_method: dict[str, list[int | None]] = {
-        method: [] for method in selected_methods
-    }
-    latencies_by_method: dict[str, list[float]] = {
-        method: [] for method in selected_methods
-    }
+    ranks_by_method: dict[str, list[int | None]] = {method: [] for method in selected_methods}
+    latencies_by_method: dict[str, list[float]] = {method: [] for method in selected_methods}
     skipped: list[dict] = []
 
     for pair in approved:
@@ -145,6 +158,9 @@ def run(
                 query=query,
                 embedder=embedder,
                 hybrid_weight=hybrid_weight,
+                rrf_k=rrf_k,
+                rerank_top_n=rerank_top_n,
+                reranker=reranker,
             )
             latency_ms = (time.perf_counter() - started) * 1000
             rank = next(
@@ -168,6 +184,9 @@ def run(
                     "tfidf_score": None
                     if result.tfidf_score is None
                     else round(result.tfidf_score, 6),
+                    "reranker_score": None
+                    if result.reranker_score is None
+                    else round(result.reranker_score, 6),
                 }
                 for index, result in enumerate(ranked[:top_k_details], start=1)
             ]
@@ -210,11 +229,11 @@ def run(
         summaries[method] = {
             "pairs_evaluated": len(ranks),
             **calculate_metrics(ranks),
-            "mean_latency_ms": sum(latencies_by_method[method]) / len(ranks),
+            **calculate_latency_stats(latencies_by_method[method]),
         }
 
     experiment = {
-        "schema_version": 1,
+        "schema_version": 2,
         "experiment_id": experiment_id,
         "started_at": started_at.isoformat(),
         "repository": repository,
@@ -224,6 +243,9 @@ def run(
         "methods": selected_methods,
         "configuration": {
             "hybrid_weight": hybrid_weight,
+            "rrf_k": rrf_k,
+            "rerank_top_n": rerank_top_n,
+            "reranker_model": settings.reranker_model,
             "top_k_details": top_k_details,
             "temporal_filter": "candidate.created_at < query.created_at",
         },
@@ -241,6 +263,8 @@ def run(
             f"R@5 {summary['recall_at_5']:.3f}  "
             f"R@10 {summary['recall_at_10']:.3f}  "
             f"MRR {summary['mrr']:.3f}"
+            f"  latency p50 {summary['median_latency_ms']:.1f}ms"
+            f" p95 {summary['p95_latency_ms']:.1f}ms"
         )
     typer.echo(f"\nJSON: {json_path}")
     typer.echo(f"CSV:  {csv_path}")
