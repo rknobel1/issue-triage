@@ -132,10 +132,9 @@ job is an intentional later milestone.
 
 ## Next milestones
 
-1. Add TF-IDF as a baseline and report Recall@1, Recall@5, and MRR.
-2. Add PostgreSQL and pgvector after the local pipeline is evaluated.
-3. Build a small Next.js interface.
-4. Add label prediction and human feedback collection.
+1. Add PostgreSQL and pgvector after the local pipeline is evaluated.
+2. Build a small Next.js interface.
+3. Add label prediction and human feedback collection.
 
 ## License
 
