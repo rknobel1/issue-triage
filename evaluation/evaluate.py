@@ -87,18 +87,25 @@ def run(
     ] = [],
     hybrid_weight: Annotated[
         float, typer.Option(help="Dense contribution to the hybrid score (0..1).")
-    ] = 0.5,
+    ] = 0.75,
     rrf_k: Annotated[
         int, typer.Option(min=1, help="RRF rank constant; larger values flatten ranks.")
     ] = 60,
     rerank_top_n: Annotated[
         int, typer.Option(min=1, help="Dense candidates passed to the cross-encoder.")
-    ] = 50,
+    ] = 20,
     top_k_details: Annotated[
         int, typer.Option(min=1, help="Number of ranked candidates saved per query.")
     ] = 10,
     output_dir: Path = Path("evaluation/results"),
     experiment_name: str | None = None,
+    min_candidates: Annotated[
+        int,
+        typer.Option(
+            min=1,
+            help="Skip queries with fewer historical candidates than this.",
+        ),
+    ] = 100,
 ) -> None:
     """Evaluate retrievers and save detailed JSON and CSV results."""
     valid_methods = {"dense", "tfidf", "hybrid", "rrf", "rerank"}
@@ -145,6 +152,22 @@ def run(
                     "query_issue": pair.query_issue,
                     "target_issue": pair.duplicate_issue,
                     "reason": "query or target is not in the imported corpus",
+                }
+            )
+            continue
+
+        candidate_count = sum(
+            issue.number != query.number and issue.created_at < query.created_at
+            for issue in issues
+        )
+        if candidate_count < min_candidates:
+            skipped.append(
+                {
+                    "query_issue": query.number,
+                    "target_issue": target.number,
+                    "reason": "insufficient historical candidates",
+                    "candidate_count": candidate_count,
+                    "minimum_required": min_candidates,
                 }
             )
             continue
@@ -221,7 +244,9 @@ def run(
             )
 
     if not csv_rows:
-        raise typer.BadParameter("None of the approved pairs exist in the imported data")
+        raise typer.BadParameter(
+            "No approved pairs had enough historical candidates in the corpus"
+        )
 
     summaries = {}
     for method in selected_methods:
@@ -247,6 +272,7 @@ def run(
             "rerank_top_n": rerank_top_n,
             "reranker_model": settings.reranker_model,
             "top_k_details": top_k_details,
+            "min_candidates": min_candidates,
             "temporal_filter": "candidate.created_at < query.created_at",
         },
         "environment": {"python": platform.python_version()},

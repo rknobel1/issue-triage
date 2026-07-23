@@ -68,22 +68,39 @@ or:
 Do not approve a pair simply because the regex found it. Confirm that the newer issue
 really describes the same underlying problem as the canonical issue.
 
-## 4. Hydrate approved pairs
+## 4. Build a fixed evaluation corpus
 
-Download any query or canonical issue missing from local storage and embed it:
+Build a deterministic corpus containing every approved pair endpoint plus a uniform
+sample of historical negatives:
 
 ```bash
-python -m evaluation.hydrate_candidates flutter/flutter
+python -m evaluation.build_corpus flutter/flutter \
+  --sample-size 10000 \
+  --seed 42
 ```
 
-Hydration fetches only required issue numbers. It is therefore much cheaper than
-importing an entire large repository.
+The builder deterministically samples issue numbers across the repository's history
+and downloads them in GraphQL batches. Pull request numbers are skipped. This avoids
+GitHub's deep REST-pagination limit while spreading negatives across the period before
+the latest evaluated query. It writes `evaluation/datasets/corpus_manifest.json` with
+the dataset hash, sampling parameters, model, and exact issue numbers. Commit that
+manifest when publishing results.
+
+This step replaces the local repository store. A GitHub token is required for a
+large repository because building the sample may consume many paginated requests.
+
+`hydrate_candidates` remains useful for quickly debugging the pipeline, but a corpus
+containing only pair endpoints must not be used for reported retrieval metrics.
 
 ## 5. Run evaluation
 
 ```bash
 python -m evaluation.evaluate flutter/flutter
 ```
+
+Evaluation skips queries with fewer than 100 historical candidates by default. This
+prevents early queries in a sampled corpus from receiving artificially easy ranks.
+Change the safeguard explicitly with `--min-candidates`.
 
 The evaluator excludes the query issue itself and issues created after the query. It
 reports Recall@1, Recall@5, Recall@10, mean reciprocal rank, and mean, median, and
@@ -135,5 +152,5 @@ correctly counted as not retrieved by the reranking pipeline.
   decisions for pairs that are rediscovered.
 - A duplicate label identifies the duplicate query, not necessarily its canonical
   target. Every extracted pair still requires review.
-- Hydrating approved pairs only adds the query and target. For credible retrieval
-  metrics, build a fixed candidate corpus containing realistic historical negatives.
+- A sampled corpus measures retrieval against that bounded corpus, not against every
+  issue ever created. Record the manifest and corpus size with published metrics.

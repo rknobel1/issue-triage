@@ -745,7 +745,7 @@
     "actor_association": "CONTRIBUTOR",
     "evidence_url": "https://github.com/flutter/flutter/issues/98475#issuecomment-1049180516",
     "discovered_at": "2026-07-21T20:58:55.796771+00:00",
-    "review_status": "approved",
+    "review_status": "rejected",
     "query_available": false,
     "target_available": false
   },

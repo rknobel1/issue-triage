@@ -37,6 +37,78 @@ class GitHubClient:
         async for issue in self._iter_issues(repository, limit, state="all"):
             yield issue
 
+    async def get_issues_batch(
+        self, repository: str, issue_numbers: list[int]
+    ) -> list[Issue]:
+        """Fetch up to 50 issue numbers in one GraphQL request.
+
+        Repository.issue returns null for pull request numbers, allowing corpus
+        sampling to skip them without one REST request per number.
+        """
+        if len(issue_numbers) > 50:
+            raise ValueError("A GraphQL issue batch cannot contain more than 50 numbers")
+        owner, name = repository.split("/", maxsplit=1)
+        fields = "\n".join(
+            f"""
+            issue{position}: issue(number: {number}) {{
+              number
+              title
+              body
+              state
+              url
+              createdAt
+              labels(first: 100) {{ nodes {{ name }} }}
+            }}
+            """
+            for position, number in enumerate(issue_numbers)
+        )
+        response = await self.client.post(
+            "https://api.github.com/graphql",
+            json={
+                "query": (
+                    "query($owner: String!, $name: String!) {"
+                    " repository(owner: $owner, name: $name) {"
+                    f"{fields}"
+                    " }"
+                    "}"
+                ),
+                "variables": {"owner": owner, "name": name},
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+        unexpected_errors = [
+            error
+            for error in payload.get("errors", [])
+            if error.get("type") != "NOT_FOUND"
+            or len(error.get("path", [])) != 2
+            or error["path"][0] != "repository"
+            or not str(error["path"][1]).startswith("issue")
+        ]
+        if unexpected_errors:
+            raise ValueError(f"GitHub GraphQL error: {unexpected_errors}")
+        records = (payload.get("data") or {}).get("repository") or {}
+        issues = []
+        for position in range(len(issue_numbers)):
+            record = records.get(f"issue{position}")
+            if record is None:
+                continue
+            issues.append(
+                Issue(
+                    number=record["number"],
+                    title=record["title"],
+                    body=record.get("body") or "",
+                    labels=[
+                        label["name"]
+                        for label in (record.get("labels") or {}).get("nodes", [])
+                    ],
+                    state=record["state"].lower(),
+                    html_url=record["url"],
+                    created_at=record["createdAt"],
+                )
+            )
+        return issues
+
     async def iter_labeled_issues(
         self,
         repository: str,
