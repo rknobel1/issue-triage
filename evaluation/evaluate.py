@@ -133,7 +133,7 @@ def run(
     ] = 60,
     rerank_top_n: Annotated[
         int, typer.Option(min=1, help="Dense candidates passed to the cross-encoder.")
-    ] = 50,
+    ] = 20,
     top_k_details: Annotated[
         int, typer.Option(min=1, help="Number of ranked candidates saved per query.")
     ] = 10,
