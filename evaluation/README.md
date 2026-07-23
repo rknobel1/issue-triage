@@ -102,6 +102,27 @@ Evaluation skips queries with fewer than 100 historical candidates by default. T
 prevents early queries in a sampled corpus from receiving artificially easy ranks.
 Change the safeguard explicitly with `--min-candidates`.
 
+Print each query's target rank and top candidates while the evaluation runs:
+
+```bash
+python -m evaluation.evaluate flutter/flutter \
+  --method dense \
+  --show-rankings \
+  --top-k-details 10
+```
+
+`--show-rankings` is opt-in because a full experiment may evaluate hundreds of
+queries and methods. Per-query target ranks and top-result details are still written
+to JSON and CSV when console output is disabled.
+
+Evaluation displays a progress bar for approved duplicate pairs by default:
+
+```text
+Evaluating duplicate pairs  [############--------]  61%  146/239
+```
+
+Disable it for redirected output or CI logs with `--no-progress`.
+
 The evaluator excludes the query issue itself and issues created after the query. It
 reports Recall@1, Recall@5, Recall@10, mean reciprocal rank, and mean, median, and
 p95 query latency.

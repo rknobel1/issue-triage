@@ -4,13 +4,15 @@ import csv
 import json
 import platform
 import time
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, TextIO
 
 import typer
 import numpy as np
 from pydantic import TypeAdapter
+from tqdm.auto import tqdm
 
 from app.config import settings
 from app.embeddings import get_embedder
@@ -47,6 +49,44 @@ def calculate_latency_stats(latencies_ms: list[float]) -> dict[str, float]:
 def load_approved(dataset: Path) -> list[DuplicateCandidate]:
     records = TypeAdapter(list[DuplicateCandidate]).validate_json(dataset.read_text())
     return [record for record in records if record.review_status == "approved"]
+
+
+def format_ranking_lines(
+    method: str,
+    query_number: int,
+    target_number: int,
+    target_rank: int | None,
+    top_results: list[dict],
+) -> list[str]:
+    """Format a compact, human-readable ranking for console output."""
+    rank_display = "not retrieved" if target_rank is None else str(target_rank)
+    lines = [
+        f"\n[{method}] query #{query_number} -> target #{target_number} "
+        f"(target rank: {rank_display})"
+    ]
+    for result in top_results:
+        marker = " <-- target" if result["issue_number"] == target_number else ""
+        lines.append(
+            f"  {result['rank']:>3}. #{result['issue_number']} "
+            f"score={result['score']:.6f}{marker}"
+        )
+    return lines
+
+
+def iter_with_progress(
+    pairs: list[DuplicateCandidate],
+    enabled: bool,
+    stream: TextIO | None = None,
+) -> Iterator[DuplicateCandidate]:
+    """Yield evaluation pairs through a terminal-friendly tqdm progress bar."""
+    yield from tqdm(
+        pairs,
+        desc="Evaluating duplicate pairs",
+        unit="pair",
+        dynamic_ncols=stream is None,
+        disable=not enabled,
+        file=stream,
+    )
 
 
 def _write_experiment(
@@ -87,13 +127,13 @@ def run(
     ] = [],
     hybrid_weight: Annotated[
         float, typer.Option(help="Dense contribution to the hybrid score (0..1).")
-    ] = 0.75,
+    ] = 0.5,
     rrf_k: Annotated[
         int, typer.Option(min=1, help="RRF rank constant; larger values flatten ranks.")
     ] = 60,
     rerank_top_n: Annotated[
         int, typer.Option(min=1, help="Dense candidates passed to the cross-encoder.")
-    ] = 20,
+    ] = 50,
     top_k_details: Annotated[
         int, typer.Option(min=1, help="Number of ranked candidates saved per query.")
     ] = 10,
@@ -106,6 +146,20 @@ def run(
             help="Skip queries with fewer historical candidates than this.",
         ),
     ] = 100,
+    show_rankings: Annotated[
+        bool,
+        typer.Option(
+            "--show-rankings",
+            help="Print each query's target rank and top results.",
+        ),
+    ] = False,
+    progress: Annotated[
+        bool,
+        typer.Option(
+            "--progress/--no-progress",
+            help="Show progress through approved duplicate pairs.",
+        ),
+    ] = True,
 ) -> None:
     """Evaluate retrievers and save detailed JSON and CSV results."""
     valid_methods = {"dense", "tfidf", "hybrid", "rrf", "rerank"}
@@ -143,7 +197,7 @@ def run(
     latencies_by_method: dict[str, list[float]] = {method: [] for method in selected_methods}
     skipped: list[dict] = []
 
-    for pair in approved:
+    for pair in iter_with_progress(approved, progress):
         query = issues_by_number.get(pair.query_issue)
         target = issues_by_number.get(pair.duplicate_issue)
         if query is None or target is None:
@@ -213,6 +267,18 @@ def run(
                 }
                 for index, result in enumerate(ranked[:top_k_details], start=1)
             ]
+            if show_rankings:
+                for line in format_ranking_lines(
+                    method,
+                    query.number,
+                    target.number,
+                    rank,
+                    top_results,
+                ):
+                    if progress:
+                        tqdm.write(line)
+                    else:
+                        typer.echo(line)
             record = {
                 "method": method,
                 "query_issue": query.number,
@@ -273,6 +339,8 @@ def run(
             "reranker_model": settings.reranker_model,
             "top_k_details": top_k_details,
             "min_candidates": min_candidates,
+            "show_rankings": show_rankings,
+            "progress": progress,
             "temporal_filter": "candidate.created_at < query.created_at",
         },
         "environment": {"python": platform.python_version()},
